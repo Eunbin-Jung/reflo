@@ -2,41 +2,46 @@
 setlocal
 cd /d "%~dp0"
 
-set "PORT=8080"
+if not defined REFLO_PORT set "REFLO_PORT=8080"
+set "PORT=%REFLO_PORT%"
 set "URL=http://127.0.0.1:%PORT%/"
+set "PYTHON_CMD="
 
-where py >nul 2>nul
+py -3 -c "import sys" >nul 2>nul
 if not errorlevel 1 (
   set "PYTHON_CMD=py -3"
-  goto python_found
+  goto runtime_ready
 )
 
-where python >nul 2>nul
+python -c "import sys; raise SystemExit(sys.version_info.major != 3)" >nul 2>nul
 if not errorlevel 1 (
   set "PYTHON_CMD=python"
-  goto python_found
 )
 
-echo Python 3가 설치되어 있지 않습니다.
-echo https://www.python.org/downloads/ 에서 Python 3를 설치한 뒤 다시 실행해주세요.
-pause
-exit /b 1
-
-:python_found
-
+:runtime_ready
 netstat -ano | findstr /R /C:":%PORT% .*LISTENING" >nul
 if not errorlevel 1 (
   echo 이미 로컬 서버가 실행 중입니다: %URL%
-  start "" "%URL%"
+  if /I not "%REFLO_NO_BROWSER%"=="1" start "" "%URL%"
   exit /b 0
 )
 
 echo REFLO 로컬 서버를 시작합니다: %URL%
-start "" "%URL%"
-%PYTHON_CMD% -m http.server %PORT% --bind 127.0.0.1
+if /I not "%REFLO_NO_BROWSER%"=="1" start "" "%URL%"
 
-if not %errorlevel%==0 (
-  echo 서버를 시작하지 못했습니다. 8080 포트를 사용하는 프로그램이 있는지 확인해주세요.
+if defined PYTHON_CMD goto run_python
+goto run_powershell
+
+:run_python
+%PYTHON_CMD% -m http.server %PORT% --bind 127.0.0.1
+goto server_finished
+
+:run_powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0serve-local.ps1" -Port %PORT%
+
+:server_finished
+if errorlevel 1 (
+  echo 서버를 시작하지 못했습니다. %PORT% 포트를 사용하는 프로그램이 있는지 확인해주세요.
   pause
   exit /b 1
 )
